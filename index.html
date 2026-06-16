@@ -1,77 +1,57 @@
 <!doctype html>
-<html>
+<html lang="zh-TW">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>QR 浮水印相機</title>
   <link rel="manifest" href="manifest.json">
+  
+  <link rel="apple-touch-icon" href="icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
   <style>
-    /* 全螢幕黑底，防止手機瀏覽器上下拉動橡皮筋效果 */
-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: sans-serif; }
-    
-    /* 讓容器撐滿全螢幕 */
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: -apple-system, sans-serif; }
     #container { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
-    
-    /* 讓視訊畫面鋪滿 */
     #video { width: 100%; height: 100%; object-fit: cover; }
     
-    /* 浮水印圖層：移到右下角，並讓滑鼠/手指點擊事件穿透(避免擋到對焦或按鈕) */
+    /* 畫面上的即時浮水印預覽 */
     #overlay {
       position: absolute;
-      bottom: 120px; /* 留空間給底部的按鈕區 */
+      bottom: 140px;
       right: 20px;
-      pointer-events: none; 
-    }
-    
-    /* 預設浮水印圖片樣式 */
-    #watermark-img {
-      max-width: 120px;
-      max-height: 120px;
-      opacity: 0.8;
-      display: none; /* 沒抓到參數前先隱藏 */
-    }
-
-    /* 按鈕控制區：固定在螢幕底部 */
-    .button-group {
-      position: absolute;
-      bottom: 30px;
-      left: 0;
-      width: 100%;
-      display: flex;
-      justify-content: center;
-      gap: 20px;
-    }
-    
-    button {
-      padding: 12px 24px;
+      color: white;
+      background: rgba(0,0,0,0.5);
+      padding: 12px;
       font-size: 16px;
-      background: rgba(255, 255, 255, 0.8);
-      border: none;
-      border-radius: 25px;
-      color: #000;
-      font-weight: bold;
-      cursor: pointer;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      border-radius: 8px;
+      line-height: 1.4;
+      pointer-events: none;
+      white-space: pre-line;
+    }
+    
+    .button-group { position: absolute; bottom: 40px; left: 0; width: 100%; display: flex; justify-content: center; gap: 30px; }
+    button {
+      padding: 14px 28px; font-size: 16px; background: rgba(255, 255, 255, 0.9); 
+      border: none; border-radius: 25px; color: #000; font-weight: bold; cursor: pointer;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.4); -webkit-tap-highlight-color: transparent;
     }
     button:active { background: #fff; transform: scale(0.95); }
+    #canvas { display: none; }
   </style>
 </head>
 <body>
 
 <div id="container">
   <video id="video" autoplay playsinline></video>
-  
-  <div id="overlay">
-    <img id="watermark-img" src="" alt="浮水印">
-  </div>
+  <div id="overlay">讀取中...</div>
 
   <div class="button-group">
-    <button onclick="startCamera()">開啟相機</button>
-    <button onclick="takePhoto()">拍照</button>
+    <button onclick="takePhoto()">📸 拍照存檔</button>
   </div>
 </div>
 
-<canvas id="canvas" style="display:none;"></canvas>
+<canvas id="canvas"></canvas>
 
 <script src="app.js"></script>
 </body>

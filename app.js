@@ -1,19 +1,26 @@
 let currentLocation = "未設定";
 
-// 判斷瀏覽器環境
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 const isLine = /Line/i.test(navigator.userAgent);
 
+// 統一解析網址參數：同時支援 ?watermark= 和 ?loc=
+function getLocationFromURL() {
+  const params = new URLSearchParams(location.search);
+  const loc = params.get("loc") || params.get("watermark");
+  if (loc) {
+    currentLocation = decodeURIComponent(loc);
+  }
+}
+
 async function startCamera() {
-  // 針對 iOS LINE 的防坑提示
   if (isIOS && isLine) {
-    alert("【系統提示】偵測到您使用 iPhone LINE 開啟。\n\n請點擊右上角「三個點 •••」，並選擇「在 Safari 開啟」，相機與拍照下載功能才能正常運作喔！");
+    alert("【💡 系統提示】\n偵測到您使用 iPhone LINE 開啟。\n\n請點擊右下角或右上角的「•••」，選擇「在 Safari 開啟」，相機與拍照下載功能才能完全正常喔！");
   }
 
   try {
     const constraints = {
       video: {
-        facingMode: "environment", // 優先使用後鏡頭
+        facingMode: "environment", // 強制後鏡頭
         width: { ideal: 1920 },
         height: { ideal: 1080 }
       },
@@ -23,40 +30,38 @@ async function startCamera() {
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     document.getElementById("video").srcObject = stream;
   } catch (error) {
-    console.error("無法開啟相機：", error);
-    alert("相機啟動失敗！請確保使用的是 HTTPS 連線，並已允許瀏覽器取用相機權限。");
+    console.error("相機啟動失敗：", error);
+    alert("無法啟動相機。請確認：\n1. 網址開頭必須是 https \n2. 已允許瀏覽器的相機權限。");
   }
 }
 
 function updateOverlay() {
-  const now = new Date().toLocaleString();
+  const now = new Date().toLocaleString('zh-TW', { hour12: false });
   const overlayEl = document.getElementById("overlay");
   if (overlayEl) {
-    overlayEl.innerText = `${now}\n位置：${currentLocation}`;
+    overlayEl.innerText = `⏱️ ${now}\n📍 位置：${currentLocation}`;
   }
 }
-
-updateOverlay();
-setInterval(updateOverlay, 1000);
 
 function takePhoto() {
   const video = document.getElementById("video");
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
 
+  // 使用相機原生高解析度
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
 
-  // 1. 繪製相機畫面
+  // 1. 繪製鏡頭畫面
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // 2. 繪製浮水印 (等比例縮放字體)
+  // 2. 動態計算字體大小 (依照片寬度 3.5% 縮放)
   const fontSize = Math.floor(canvas.width * 0.035); 
   ctx.font = `bold ${fontSize}px sans-serif`;
 
-  const now = new Date().toLocaleString();
-  const text1 = now;
-  const text2 = `位置：${currentLocation}`;
+  const now = new Date().toLocaleString('zh-TW', { hour12: false });
+  const text1 = `⏱️ ${now}`;
+  const text2 = `📍 位置：${currentLocation}`;
 
   const paddingX = canvas.width * 0.04; 
   const paddingY = canvas.height * 0.05; 
@@ -65,60 +70,50 @@ function takePhoto() {
   const text2Width = ctx.measureText(text2).width;
   const maxTextWidth = Math.max(text1Width, text2Width);
 
-  // 背景框
-  ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+  // 3. 繪製半透明黑底
+  ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
   const rectWidth = maxTextWidth + 40;
-  const rectHeight = (fontSize * 2) + 40;
+  const rectHeight = (fontSize * 2) + 50;
   ctx.fillRect(canvas.width - rectWidth - paddingX + 20, canvas.height - rectHeight - paddingY + 10, rectWidth, rectHeight);
 
-  // 畫字
+  // 4. 繪製白色文字
   ctx.fillStyle = "white";
   ctx.textBaseline = "bottom";
-  ctx.fillText(text1, canvas.width - text1Width - paddingX, canvas.height - paddingY - fontSize - 10);
+  ctx.fillText(text1, canvas.width - text1Width - paddingX, canvas.height - paddingY - fontSize - 15);
   ctx.fillText(text2, canvas.width - text2Width - paddingX, canvas.height - paddingY);
 
-  // 3. 產出圖片 DataURL
   const imgDataUrl = canvas.toDataURL("image/png");
 
-  // 4. 下載防禦機制（解決 iOS LINE 或部分瀏覽器不支援自動下載的問題）
+  // 5. 萬能下載與防禦機制
   try {
-    // 試圖自動下載
     const link = document.createElement("a");
-    link.download = `photo_${currentLocation}_${Date.now()}.png`;
+    link.download = `Photo_${currentLocation}_${Date.now()}.png`;
     link.href = imgDataUrl;
-    document.body.appendChild(link); // iOS 有時需要節點在 body 上才能點擊
+    document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   } catch (e) {
-    // 如果自動下載失敗（例如在 LINE 內），改彈出視窗讓使用者長按圖片儲存
     showImageModal(imgDataUrl);
   }
 }
 
-// 彈出視窗供使用者「長按儲存」照片 (相容性方案)
 function showImageModal(src) {
-  // 建立一個覆蓋全螢幕的特殊圖層
   const modal = document.createElement("div");
-  modal.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#fff;";
-  
+  modal.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#fff; padding:20px; box-sizing:border-box;";
   modal.innerHTML = `
-    <p style="margin-bottom:15px; font-weight:bold;">請【長按下方照片】選擇儲存影像</p>
-    <img src="${src}" style="max-width:90%; max-height:70%; box-shadow:0 0 20px rgba(217,217,217,0.5); margin-bottom:20px;">
-    <button id="close-modal-btn" style="padding:10px 20px; font-size:16px; background:#fff; color:#000; border:none; border-radius:20px; font-weight:bold;">返回相機</button>
+    <p style="margin-bottom:15px; font-weight:bold; font-size:18px;">📸 拍照成功！</p>
+    <p style="margin-bottom:15px; color:#ccc;">請【長按下方照片】選擇儲存影像</p>
+    <img src="${src}" style="max-width:100%; max-height:65%; object-fit:contain; border-radius:8px; box-shadow:0 0 20px rgba(255,255,255,0.2); margin-bottom:25px;">
+    <button id="close-modal-btn" style="padding:12px 35px; font-size:16px; background:#fff; color:#000; border:none; border-radius:25px; font-weight:bold;">返回相機</button>
   `;
-  
   document.body.appendChild(modal);
-  
   document.getElementById("close-modal-btn").addEventListener("click", () => {
     document.body.removeChild(modal);
   });
 }
 
-function getLocationFromURL() {
-  const params = new URLSearchParams(location.search);
-  const loc = params.get("loc");
-  if (loc) currentLocation = decodeURIComponent(loc);
-}
-
+// 初始化
 getLocationFromURL();
+updateOverlay();
+setInterval(updateOverlay, 1000);
 window.addEventListener("DOMContentLoaded", startCamera);
