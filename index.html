@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QR 浮水印相機</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    body { margin:0; font-family: sans-serif; background:#000; color:#fff; }
+    #video { width:100%; height:auto; }
+    #overlay {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      color: white;
+      background: rgba(0,0,0,0.5);
+      padding: 10px;
+      font-size: 16px;
+    }
+    #container { position: relative; }
+    button { padding:10px; margin:5px; }
+  </style>
+</head>
+<body>
+
+<h3>QR 浮水印相機</h3>
+
+<div id="container">
+  <video id="video" autoplay playsinline></video>
+  <div id="overlay"></div>
+</div>
+
+<button onclick="startCamera()">開啟相機</button>
+<button onclick="takePhoto()">拍照</button>
+
+<canvas id="canvas" style="display:none;"></canvas>
+
+<script src="app.js"></script>
+</body>
+</html>

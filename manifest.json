@@ -1,0 +1,8 @@
+{
+  "name": "QR浮水印相機",
+  "short_name": "WatermarkCam",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000"
+}
