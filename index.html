@@ -1,40 +1,180 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="zh-TW">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>QR 浮水印相機</title>
-  <link rel="manifest" href="manifest.json">
-  <style>
-    body { margin:0; font-family: sans-serif; background:#000; color:#fff; }
-    #video { width:100%; height:auto; }
-    #overlay {
-      position: absolute;
-      bottom: 20px;
-      left: 20px;
-      color: white;
-      background: rgba(0,0,0,0.5);
-      padding: 10px;
-      font-size: 16px;
-    }
-    #container { position: relative; }
-    button { padding:10px; margin:5px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>QR 掃碼浮水印相機</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        
+        /* 相機預覽畫面容器 */
+        #camera-container { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+
+        /* 浮水印圖層（覆蓋在畫面上） */
+        #watermark-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; /* 讓點擊事件穿透，不影響相機控制 */
+            display: flex;
+            align-items: flex-end; /* 預設浮水印在右下角，可自訂 */
+            justify-content: flex-end;
+            padding: 20px;
+        }
+        #watermark-img { max-width: 120px; max-height: 120px; opacity: 0.8; object-fit: contain; }
+
+        /* 控制按鈕區 */
+        .controls { position: absolute; bottom: 40px; left: 0; width: 100%; display: flex; justify-content: space-around; align-items: center; padding: 0 20px; }
+        .btn { background: rgba(255,255,255,0.2); border: 2px solid #fff; color: #fff; padding: 12px; border-radius: 50%; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); -webkit-tap-highlight-color: transparent; }
+        .btn:active { transform: scale(0.95); background: rgba(255,255,255,0.4); }
+        #snap-btn { width: 80px; height: 80px; background: #fff; border: 4px solid rgba(0,0,0,0.1); }
+        #snap-btn:active { background: #ddd; }
+        
+        /* 隱藏用於合成照片的 Canvas */
+        canvas { display: none; }
+    </style>
 </head>
 <body>
 
-<h3>QR 浮水印相機</h3>
+    <div id="camera-container">
+        <!-- 相機即時畫面 -->
+        <video id="video" autoplay playsinline></video>
+        
+        <!-- 浮水印圖層 -->
+        <div id="watermark-overlay">
+            <img id="watermark-img" src="" alt="等待載入浮水印..." style="display:none;">
+        </div>
 
-<div id="container">
-  <video id="video" autoplay playsinline></video>
-  <div id="overlay"></div>
-</div>
+        <!-- 介面按鈕 -->
+        <div class="controls">
+            <div id="switch-btn" class="btn">🔄</div>
+            <div id="snap-btn" class="btn"></div>
+            <div id="info-btn" class="btn">ℹ️</div>
+        </div>
+    </div>
 
-<button onclick="startCamera()">開啟相機</button>
-<button onclick="takePhoto()">拍照</button>
+    <!-- 背後默默處理照片合成的畫布 -->
+    <canvas id="canvas"></canvas>
 
-<canvas id="canvas" style="display:none;"></canvas>
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const watermarkImg = document.getElementById('watermark-img');
+    const snapBtn = document.getElementById('snap-btn');
+    const switchBtn = document.getElementById('switch-btn');
+    
+    let currentFacingMode = 'environment'; // 預設使用後鏡頭
+    let stream = null;
 
-<script src="app.js"></script>
+    // 1. 解析網址參數，決定載入哪張浮水印
+    function loadWatermarkFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const watermarkType = urlParams.get('watermark'); // 取得 ?watermark= 之後的字串
+        
+        if (watermarkType) {
+            // 假設你的浮水印圖片放在同一個資料夾，名為 A.png, B.png ...
+            watermarkImg.src = `${watermarkType}.png`;
+            watermarkImg.style.display = 'block';
+        } else {
+            alert('未偵測到浮水印參數！請檢查網址是否包含 ?watermark=xxx');
+        }
+    }
+
+    // 2. 啟動相機
+    async function startCamera(facingMode) {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+        
+        const constraints = {
+            video: { 
+                facingMode: facingMode,
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+            },
+            audio: false
+        };
+
+        try {
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = stream;
+        } catch (err) {
+            console.error("相機啟動失敗: ", err);
+            alert("無法開啟相機，請檢查瀏覽器權限設定。");
+        }
+    }
+
+    // 3. 切換前後鏡頭
+    switchBtn.addEventListener('click', () => {
+        currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
+        startCamera(currentFacingMode);
+    });
+
+    // 4. 拍照並合成浮水印
+    snapBtn.addEventListener('click', () => {
+        if (!watermarkImg.src || watermarkImg.style.display === 'none') {
+            alert("浮水印尚未載入完成");
+            return;
+        }
+
+        // 設定 Canvas 大小與實際 Video 影片串流解析度一致
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+
+        // 如果是前鏡頭，照片需要左右鏡像翻轉才符合直覺
+        if (currentFacingMode === 'user') {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+        }
+
+        // 畫上相機目前的畫面
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // 如果剛才翻轉了，現在要轉回來，免得浮水印也跟著左右顛倒
+        if (currentFacingMode === 'user') {
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+        }
+
+        // 計算浮水印在實際照片上的比例與位置（以下範例為右下角，大小固定為照片寬度的 20%）
+        const wmWidth = canvas.width * 0.2; 
+        const scale = wmWidth / watermarkImg.naturalWidth;
+        const wmHeight = watermarkImg.naturalHeight * scale;
+        
+        const padding = 40; // 邊距
+        const x = canvas.width - wmWidth - padding;
+        const y = canvas.height - wmHeight - padding;
+
+        // 將浮水印畫上 Canvas
+        ctx.globalAlpha = 0.8; // 透明度
+        ctx.drawImage(watermarkImg, x, y, wmWidth, wmHeight);
+        ctx.globalAlpha = 1.0;
+
+        // 產出圖片並觸發下載
+        try {
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            const link = document.createElement('a');
+            link.download = `photo_${Date.now()}.jpg`;
+            link.href = dataUrl;
+            link.click();
+        } catch (e) {
+            // 如果在 LINE 內建瀏覽器中無法觸發自動下載，提示使用者長按儲存
+            alert("拍照成功！如果沒有自動儲存，請嘗試更換外置瀏覽器（Safari/Chrome）開啟本頁。");
+        }
+    });
+
+    // 點擊資訊鈕顯示目前載入的浮水印名稱
+    document.getElementById('info-btn').addEventListener('click', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        alert(`目前載入模組: ${urlParams.get('watermark') || '無'}`);
+    });
+
+    // 初始化執行
+    window.addEventListener('DOMContentLoaded', () => {
+        loadWatermarkFromURL();
+        startCamera(currentFacingMode);
+    });
+</script>
 </body>
 </html>
